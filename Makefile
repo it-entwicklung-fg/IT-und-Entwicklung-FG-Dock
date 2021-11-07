@@ -1,10 +1,10 @@
 # Basic Makefile
 
-UUID = dash-to-dock@micxgx.gmail.com
-BASE_MODULES = extension.js stylesheet.css metadata.json COPYING README.md
-EXTRA_MODULES = dash.js docking.js appIcons.js appIconIndicators.js fileManager1API.js launcherAPI.js locations.js windowPreview.js intellihide.js prefs.js theming.js utils.js dbusmenuUtils.js Settings.ui
+UUID = dash-to-dock@it-und-entwicklung-fg.de
+BASE_MODULES = extension.js stylesheet.css metadata.json LICENSE README.md
+EXTRA_MODULES = dash.js docking.js appIcons.js appIconIndicators.js fileManager1API.js launcherAPI.js locations.js windowPreview.js intellihide.js theming.js utils.js dbusmenuUtils.js
 EXTRA_MEDIA = logo.svg glossy.svg highlight_stacked_bg.svg highlight_stacked_bg_h.svg
-TOLOCALIZE =  prefs.js appIcons.js locations.js
+TOLOCALIZE =  appIcons.js locations.js
 MSGSRC = $(wildcard po/*.po)
 ifeq ($(strip $(DESTDIR)),)
 	INSTALLTYPE = local
@@ -14,7 +14,7 @@ else
 	SHARE_PREFIX = $(DESTDIR)/usr/share
 	INSTALLBASE = $(SHARE_PREFIX)/gnome-shell/extensions
 endif
-INSTALLNAME = dash-to-dock@micxgx.gmail.com
+INSTALLNAME = dash-to-dock@it-und-entwicklung-fg.de
 
 # The command line passed variable VERSION is used to set the version string
 # in the metadata and in the generated zip-file. If no VERSION is passed, the
@@ -37,22 +37,6 @@ extension: ./schemas/gschemas.compiled $(MSGSRC:.po=.mo)
 ./schemas/gschemas.compiled: ./schemas/org.gnome.shell.extensions.dash-to-dock.gschema.xml
 	glib-compile-schemas ./schemas/
 
-potfile: ./po/dashtodock.pot
-
-mergepo: potfile
-	for l in $(MSGSRC); do \
-		msgmerge -U $$l ./po/dashtodock.pot; \
-	done;
-
-./po/dashtodock.pot: $(TOLOCALIZE) Settings.ui
-	mkdir -p po
-	xgettext -k --keyword=__ --keyword=N__ --add-comments='Translators:' -o po/dashtodock.pot --package-name "Dash to Dock" $(TOLOCALIZE)
-	intltool-extract --type=gettext/glade Settings.ui
-	xgettext -k --keyword=_ --keyword=N_ --join-existing -o po/dashtodock.pot Settings.ui.h
-
-./po/%.mo: ./po/%.po
-	msgfmt -c $< -o $@
-
 install: install-local
 
 install-local: _build
@@ -62,9 +46,8 @@ install-local: _build
 ifeq ($(INSTALLTYPE),system)
 	# system-wide settings and locale files
 	rm -r $(INSTALLBASE)/$(INSTALLNAME)/schemas $(INSTALLBASE)/$(INSTALLNAME)/locale
-	mkdir -p $(SHARE_PREFIX)/glib-2.0/schemas $(SHARE_PREFIX)/locale
+	mkdir -p $(SHARE_PREFIX)/glib-2.0/schemas
 	cp -r ./schemas/*gschema.* $(SHARE_PREFIX)/glib-2.0/schemas
-	cp -r ./_build/locale/* $(SHARE_PREFIX)/locale
 endif
 	-rm -fR _build
 	echo done
@@ -84,11 +67,4 @@ _build: all
 	mkdir -p _build/schemas
 	cp schemas/*.xml _build/schemas/
 	cp schemas/gschemas.compiled _build/schemas/
-	mkdir -p _build/locale
-	for l in $(MSGSRC:.po=.mo) ; do \
-		lf=_build/locale/`basename $$l .mo`; \
-		mkdir -p $$lf; \
-		mkdir -p $$lf/LC_MESSAGES; \
-		cp $$l $$lf/LC_MESSAGES/dashtodock.mo; \
-	done;
 	sed -i 's/"version": -1/"version": "$(VERSION)"/'  _build/metadata.json;
