@@ -5,9 +5,9 @@
 ],
 "uuid": "dash-to-dock@it-und-entwicklung-fg.de",
 "name": "IT und Entwicklung - FG Dock",
-"description": "A dock for the Gnome Shell. This extension moves the dash out of the overview transforming it in a dock for an easier launching of applications and a faster switching between windows and desktops. Side and bottom placement options are available.",
+"description": "A modified version of Dash to Dock.",
 "original-author": "micxgx@gmail.com",
-"url": "https://micheleg.github.io/dash-to-dock/",
+"url": "https://github.com/it-entwicklung-fg/IT-und-Entwicklung-FG-Dock",
 "gettext-domain": "dashtodock",
-"version": 69
+"version": 1
 }
