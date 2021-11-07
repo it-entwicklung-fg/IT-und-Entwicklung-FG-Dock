@@ -98,7 +98,9 @@ class DashToDock_MyDashActor extends St.Widget {
 
         let childBox = new Clutter.ActorBox();
         let settings = Docking.DockManager.settings;
-        if ((!this._isHorizontal) || (!this._rtl)) {
+        if ((settings.get_boolean('show-apps-at-top') && !this._isHorizontal)
+            || (settings.get_boolean('show-apps-at-top') && !this._rtl)
+            || (!settings.get_boolean('show-apps-at-top') && this._isHorizontal && this._rtl)) {
             childBox.x1 = contentBox.x1 + offset_x;
             childBox.y1 = contentBox.y1 + offset_y;
             childBox.x2 = contentBox.x2;
@@ -178,7 +180,7 @@ var MyDash = GObject.registerClass({
     _init(remoteModel, monitorIndex) {
         // Initialize icon variables and size
         this._maxHeight = -1;
-        this.iconSize = 48;
+        this.iconSize = Docking.DockManager.settings.get_int('dash-max-icon-size');
         this._availableIconSizes = baseIconSizes;
         this._shownInitially = false;
         this._initializeIconSize(this.iconSize);
@@ -430,6 +432,10 @@ var MyDash = GObject.registerClass({
     }
 
     _onScrollEvent(actor, event) {
+        // If scroll is not used because the icon is resized, let the scroll event propagate.
+        if (!Docking.DockManager.settings.get_boolean('icon-size-fixed'))
+            return Clutter.EVENT_PROPAGATE;
+
         // reset timeout to avid conflicts with the mousehover event
         if (this._ensureAppIconVisibilityTimeoutId > 0) {
             GLib.source_remove(this._ensureAppIconVisibilityTimeoutId);
@@ -685,12 +691,15 @@ var MyDash = GObject.registerClass({
         let running = this._appSystem.get_running();
         let settings = Docking.DockManager.settings;
 
-        // When using isolation, we filter out apps that have no windows in
-        // the current workspace
-        let monitorIndex = this._monitorIndex;
-        running = running.filter(function(_app) {
-            return AppIcons.getInterestingWindows(_app, monitorIndex).length != 0;
-        });
+        if (settings.get_boolean('isolate-workspaces') ||
+            settings.get_boolean('isolate-monitors')) {
+            // When using isolation, we filter out apps that have no windows in
+            // the current workspace
+            let monitorIndex = this._monitorIndex;
+            running = running.filter(function(_app) {
+                return AppIcons.getInterestingWindows(_app, monitorIndex).length != 0;
+            });
+        }
 
         let children = this._box.get_children().filter(function(actor) {
             return actor.child &&
@@ -703,17 +712,20 @@ var MyDash = GObject.registerClass({
         // Apps supposed to be in the dash
         let newApps = [];
 
-        for (let id in favorites)
-            newApps.push(favorites[id]);
+        if (settings.get_boolean('show-favorites')) {
+            for (let id in favorites)
+                newApps.push(favorites[id]);
+        }
 
         // We reorder the running apps so that they don't change position on the
         // dash with every redisplay() call
+        if (settings.get_boolean('show-running')) {
             // First: add the apps from the oldApps list that are still running
             for (let i = 0; i < oldApps.length; i++) {
                 let index = running.indexOf(oldApps[i]);
                 if (index > -1) {
                     let app = running.splice(index, 1)[0];
-                    if ((app.get_id() in favorites))
+                    if (settings.get_boolean('show-favorites') && (app.get_id() in favorites))
                         continue;
                     newApps.push(app);
                 }
@@ -721,10 +733,11 @@ var MyDash = GObject.registerClass({
             // Second: add the new apps
             for (let i = 0; i < running.length; i++) {
                 let app = running[i];
-                if ((app.get_id() in favorites))
+                if (settings.get_boolean('show-favorites') && (app.get_id() in favorites))
                     continue;
                 newApps.push(app);
             }
+        }
 
         if (settings.get_boolean('show-mounts')) {
             if (!this._removables) {
@@ -895,7 +908,15 @@ var MyDash = GObject.registerClass({
     _initializeIconSize(max_size) {
         let max_allowed = baseIconSizes[baseIconSizes.length-1];
         max_size = Math.min(max_size, max_allowed);
-        this._availableIconSizes = [max_size];
+
+        if (Docking.DockManager.settings.get_boolean('icon-size-fixed'))
+            this._availableIconSizes = [max_size];
+        else {
+            this._availableIconSizes = baseIconSizes.filter(function(val) {
+                return (val<max_size);
+            });
+            this._availableIconSizes.push(max_size);
+        }
     }
 
     setIconSize(max_size, doNotAnimate) {

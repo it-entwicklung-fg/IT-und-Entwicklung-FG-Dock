@@ -45,7 +45,8 @@ const clickAction = {
     PREVIEWS: 5,
     MINIMIZE_OR_PREVIEWS: 6,
     FOCUS_OR_PREVIEWS: 7,
-    QUIT: 8,
+    FOCUS_MINIMIZE_OR_PREVIEWS: 8,
+    QUIT: 9
 };
 
 const scrollAction = {
@@ -103,11 +104,12 @@ class MyAppIcon extends Dash.DashIcon {
                                                  this._onFocusAppChanged.bind(this));
 
         // In Wayland sessions, this signal is needed to track the state of windows dragged
-        // from one monitor to another. As this is triggered quite often (whenever a new window
+        // from one monitor to another. As this is triggered quite often (whenever a new winow
         // of any application opened or moved to a different desktop),
         // we restrict this signal to  the case when 'isolate-monitors' is true,
         // and if there are at least 2 monitors.
-        if (Main.layoutManager.monitors.length > 1) {
+        if (Docking.DockManager.settings.get_boolean('isolate-monitors') &&
+            Main.layoutManager.monitors.length > 1) {
             this._signalsHandler.removeWithLabel('isolate-monitors');
             this._signalsHandler.addWithLabel('isolate-monitors', [
                 global.display,
@@ -118,6 +120,18 @@ class MyAppIcon extends Dash.DashIcon {
 
         this._progressOverlayArea = null;
         this._progress = 0;
+
+        let keys = ['apply-custom-theme',
+                   'running-indicator-style',
+                    ];
+
+        keys.forEach(function(key) {
+            this._signalsHandler.add([
+                Docking.DockManager.settings,
+                'changed::' + key,
+                this._updateIndicatorStyle.bind(this)
+            ]);
+        }, this);
 
         if (this._location) {
             this._signalsHandler.add([
@@ -173,7 +187,7 @@ class MyAppIcon extends Dash.DashIcon {
             this.onWindowsChanged();
     }
 
-    /*vfunc_scroll_event(scrollEvent) {
+    vfunc_scroll_event(scrollEvent) {
         let settings = Docking.DockManager.settings;
         let isEnabled = settings.get_enum('scroll-action') === scrollAction.CYCLE_WINDOWS;
         if (!isEnabled)
@@ -231,7 +245,7 @@ class MyAppIcon extends Dash.DashIcon {
         else
             this.app.activate();
         return Clutter.EVENT_STOP;
-    }*/
+    }
 
     onWindowsChanged() {
 
@@ -259,10 +273,12 @@ class MyAppIcon extends Dash.DashIcon {
         [rect.width, rect.height] = this.get_transformed_size();
 
         let windows = this.getWindows();
-        let monitorIndex = this.monitorIndex;
-        windows = windows.filter(function(w) {
-            return w.get_monitor() == monitorIndex;
-        });
+        if (Docking.DockManager.settings.get_boolean('multi-monitor')) {
+            let monitorIndex = this.monitorIndex;
+            windows = windows.filter(function(w) {
+                return w.get_monitor() == monitorIndex;
+            });
+        }
         windows.forEach(function(w) {
             w.set_icon_geometry(rect);
         });
@@ -440,6 +456,19 @@ class MyAppIcon extends Dash.DashIcon {
                 if (this.app == focusedApp &&
                     (windows.length > 1 || modifiers || button != 1)) {
                     this._windowPreviews();
+                } else {
+                    // Activate the first window
+                    let w = windows[0];
+                    Main.activateWindow(w);
+                }
+                break;
+
+            case clickAction.FOCUS_MINIMIZE_OR_PREVIEWS:
+                if (this.app == focusedApp) {
+                    if (windows.length > 1 || modifiers || button != 1)
+                        this._windowPreviews();
+                    else if (!Main.overview.visible)
+                        this._minimizeWindow();
                 } else {
                     // Activate the first window
                     let w = windows[0];
@@ -647,6 +676,12 @@ class MyAppIcon extends Dash.DashIcon {
     // By default only non minimized windows are activated.
     // This activates all windows in the current workspace.
     _activateAllWindows() {
+        // First activate first window so workspace is switched if needed.
+        // We don't do this if isolation is on!
+        if (!Docking.DockManager.settings.get_boolean('isolate-workspaces') &&
+            !Docking.DockManager.settings.get_boolean('isolate-monitors'))
+            this.app.activate();
+
         // then activate all other app windows in the current workspace
         let windows = this.getInterestingWindows();
         let activeWorkspace = global.workspace_manager.get_active_workspace_index();
@@ -688,10 +723,11 @@ class MyAppIcon extends Dash.DashIcon {
 
         // If there isn't already a list of windows for the current app,
         // or the stored list is outdated, use the current windows list.
+        let monitorIsolation = Docking.DockManager.settings.get_boolean('isolate-monitors');
         if (!recentlyClickedApp ||
             recentlyClickedApp.get_id() != this.app.get_id() ||
             recentlyClickedAppWindows.length != app_windows.length ||
-            (recentlyClickedAppMonitor != this.monitorIndex)) {
+            (recentlyClickedAppMonitor != this.monitorIndex && monitorIsolation)) {
             recentlyClickedApp = this.app;
             recentlyClickedAppWindows = app_windows;
             recentlyClickedAppMonitor = this.monitorIndex;
@@ -796,6 +832,8 @@ const MyAppIconMenu = class DashToDock_MyAppIconMenu extends AppDisplay.AppIconM
 
     _rebuildMenu() {
         this.removeAll();
+
+        if (Docking.DockManager.settings.get_boolean('show-windows-preview')) {
             // Display the app windows menu items and the separator between windows
             // of the current desktop and other windows.
 
@@ -889,6 +927,13 @@ const MyAppIconMenu = class DashToDock_MyAppIconMenu extends AppDisplay.AppIconM
                 }
             }
 
+        } else {
+            if (super._rebuildMenu)
+                super._rebuildMenu();
+            else
+                super._redisplay();
+        }
+
         // dynamic menu
         const items = this._getMenuItems();
         let i = items.length;
@@ -935,6 +980,8 @@ const MyAppIconMenu = class DashToDock_MyAppIconMenu extends AppDisplay.AppIconM
           this._quitfromDashMenuItem.actor.hide();
       }
 
+      if(Docking.DockManager.settings.get_boolean('show-windows-preview')){
+
           // update, show, or hide the allWindows menu
           // Check if there are new windows not already displayed. In such case, repopulate the allWindows
           // menu. Windows removal is already handled by each preview being connected to the destroy signal
@@ -959,6 +1006,7 @@ const MyAppIconMenu = class DashToDock_MyAppIconMenu extends AppDisplay.AppIconM
               this._allWindowsMenuItem.show();
               this._allWindowsMenuItem.setSensitive(true);
           }
+      }
 
       // Update separators
       this._getMenuItems().forEach(item => {
@@ -1020,12 +1068,15 @@ function getInterestingWindows(app, monitorIndex, location) {
 
     // When using workspace isolation, we filter out windows
     // that are not in the current workspace
-    windows = windows.filter(function(w) {
-        return w.get_workspace().index() == global.workspace_manager.get_active_workspace_index();
-    });
-    windows = windows.filter(function(w) {
-        return w.get_monitor() == monitorIndex;
-    });
+    if (settings.get_boolean('isolate-workspaces'))
+        windows = windows.filter(function(w) {
+            return w.get_workspace().index() == global.workspace_manager.get_active_workspace_index();
+        });
+
+    if (settings.get_boolean('isolate-monitors'))
+        windows = windows.filter(function(w) {
+            return w.get_monitor() == monitorIndex;
+        });
 
     return windows;
 }

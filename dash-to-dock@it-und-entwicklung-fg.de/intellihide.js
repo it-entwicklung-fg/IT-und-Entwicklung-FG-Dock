@@ -20,6 +20,12 @@ const OverlapStatus = {
     TRUE: 1
 };
 
+const IntellihideMode = {
+    ALL_WINDOWS: 0,
+    FOCUS_APPLICATION_WINDOWS: 1,
+    MAXIMIZED_WINDOWS : 2
+};
+
 // List of windows type taken into account. Order is important (keep the original
 // enum order).
 const handledWindowTypes = [
@@ -244,6 +250,41 @@ var Intellihide = class DashToDock_Intellihide {
         let currentWorkspace = global.workspace_manager.get_active_workspace_index();
         let wksp = meta_win.get_workspace();
         let wksp_index = wksp.index();
+
+        // Depending on the intellihide mode, exclude non-relevent windows
+        switch (Docking.DockManager.settings.get_enum('intellihide-mode')) {
+            case IntellihideMode.ALL_WINDOWS:
+                // Do nothing
+                break;
+
+            case IntellihideMode.FOCUS_APPLICATION_WINDOWS:
+                // Skip windows of other apps
+                if (this._focusApp) {
+                    // The DropDownTerminal extension is not an application per se
+                    // so we match its window by wm class instead
+                    if (meta_win.get_wm_class() == 'DropDownTerminalWindow')
+                        return true;
+
+                    let currentApp = this._tracker.get_window_app(meta_win);
+                    let focusWindow = global.display.get_focus_window()
+
+                    // Consider half maximized windows side by side
+                    // and windows which are alwayson top
+                    if((currentApp != this._focusApp) && (currentApp != this._topApp)
+                        && !((focusWindow && focusWindow.maximized_vertically && !focusWindow.maximized_horizontally)
+                              && (meta_win.maximized_vertically && !meta_win.maximized_horizontally)
+                              && meta_win.get_monitor() == focusWindow.get_monitor())
+                        && !meta_win.is_above())
+                        return false;
+                }
+                break;
+
+            case IntellihideMode.MAXIMIZED_WINDOWS:
+                // Skip unmaximized windows
+                if (!meta_win.maximized_vertically && !meta_win.maximized_horizontally)
+                    return false;
+                break;
+        }
 
         if ( wksp_index == currentWorkspace && meta_win.showing_on_its_workspace() )
             return true;

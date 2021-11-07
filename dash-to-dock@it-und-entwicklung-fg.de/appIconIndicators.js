@@ -19,6 +19,13 @@ let tracker = Shell.WindowTracker.get_default();
 
 const RunningIndicatorStyle = {
     DEFAULT: 0,
+    DOTS: 1,
+    SQUARES: 2,
+    DASHES: 3,
+    SEGMENTED: 4,
+    SOLID: 5,
+    CILIORA: 6,
+    METRO: 7
 };
 
 const MAX_WINDOWS_CLASSES = 4;
@@ -40,8 +47,51 @@ var AppIconIndicator = class DashToDock_AppIconIndicator {
 
         // Choose the style for the running indicators
         let runningIndicator = null;
+        let runningIndicatorStyle;
 
-        runningIndicator = new RunningIndicatorDefault(source);
+        let settings = Docking.DockManager.settings;
+        if (settings.get_boolean('apply-custom-theme' )) {
+            runningIndicatorStyle = RunningIndicatorStyle.DOTS;
+        } else {
+            runningIndicatorStyle = settings.get_enum('running-indicator-style');
+        }
+
+        switch (runningIndicatorStyle) {
+            case RunningIndicatorStyle.DEFAULT:
+                runningIndicator = new RunningIndicatorDots(source);
+                break;
+
+            case RunningIndicatorStyle.DOTS:
+                runningIndicator = new RunningIndicatorDots(source);
+                break;
+
+            case RunningIndicatorStyle.SQUARES:
+                runningIndicator = new RunningIndicatorSquares(source);
+                break;
+
+            case RunningIndicatorStyle.DASHES:
+                runningIndicator = new RunningIndicatorDashes(source);
+            break;
+
+            case RunningIndicatorStyle.SEGMENTED:
+                runningIndicator = new RunningIndicatorSegmented(source);
+                break;
+
+            case RunningIndicatorStyle.SOLID:
+                runningIndicator = new RunningIndicatorSolid(source);
+                break;
+
+            case RunningIndicatorStyle.CILIORA:
+                runningIndicator = new RunningIndicatorCiliora(source);
+                break;
+
+            case RunningIndicatorStyle.METRO:
+                runningIndicator = new RunningIndicatorMetro(source);
+            break;
+
+            default:
+                runningIndicator = new RunningIndicatorBase(source);
+        }
 
         this._indicators.push(runningIndicator);
     }
@@ -161,7 +211,37 @@ var RunningIndicatorBase = class DashToDock_RunningIndicatorBase extends Indicat
         this._source._dot.opacity = 255;
     }
 
+    _enableBacklight() {
+
+        let colorPalette = this._dominantColorExtractor._getColorPalette();
+
+        // Fallback
+        if (colorPalette === null) {
+            this._source._iconContainer.set_style(
+                'border-radius: 5px;' +
+                'background-gradient-direction: vertical;' +
+                'background-gradient-start: #e0e0e0;' +
+                'background-gradient-end: darkgray;'
+            );
+
+           return;
+        }
+
+        this._source._iconContainer.set_style(
+            'border-radius: 5px;' +
+            'background-gradient-direction: vertical;' +
+            'background-gradient-start: ' + colorPalette.original + ';' +
+            'background-gradient-end: ' +  colorPalette.darker + ';'
+        );
+
+    }
+
+    _disableBacklight() {
+        this._source._iconContainer.set_style(null);
+    }
+
     destroy() {
+        this._disableBacklight();
         // Remove glossy background if the children still exists
         if (this._source._iconContainer.get_children().length > 1)
             this._source._iconContainer.get_children()[1].set_style(null);
@@ -171,22 +251,7 @@ var RunningIndicatorBase = class DashToDock_RunningIndicatorBase extends Indicat
     }
 };
 
-// We add a css class so third parties themes can limit their indicaor customization
-// to the case we do nothing
-/*var RunningIndicatorDefault = class DashToDock_RunningIndicatorDefault extends RunningIndicatorBase {
-
-    constructor(source) {
-        super(source);
-        this._source.add_style_class_name('default');
-    }
-
-    destroy() {
-        this._source.remove_style_class_name('default');
-        super.destroy();
-    }
-};*/
-
-var RunningIndicatorDefault = class DashToDock_RunningIndicatorDefault extends RunningIndicatorBase {
+var RunningIndicatorDots = class DashToDock_RunningIndicatorDots extends RunningIndicatorBase {
 
     constructor(source) {
         super(source)
@@ -227,6 +292,21 @@ var RunningIndicatorDefault = class DashToDock_RunningIndicatorDefault extends R
         this._area.connect('repaint', this._updateIndicator.bind(this));
         this._source._iconContainer.add_child(this._area);
 
+        let keys = ['custom-theme-running-dots-color',
+                   'custom-theme-running-dots-border-color',
+                   'custom-theme-running-dots-border-width',
+                   'custom-theme-customize-running-dots',
+                   'unity-backlit-items',
+                   'running-indicator-dominant-color'];
+
+        keys.forEach(function(key) {
+            this._signalsHandler.add([
+                Docking.DockManager.settings,
+                'changed::' + key,
+                this.update.bind(this)
+            ]);
+        }, this);
+
         // Apply glossy background
         // TODO: move to enable/disableBacklit to apply itonly to the running apps?
         // TODO: move to css class for theming support
@@ -236,6 +316,19 @@ var RunningIndicatorDefault = class DashToDock_RunningIndicatorDefault extends R
 
     update() {
         super.update();
+
+        // Enable / Disable the backlight of running apps
+        if (!Docking.DockManager.settings.get_boolean('apply-custom-theme') &&
+            Docking.DockManager.settings.get_boolean('unity-backlit-items')) {
+            this._source._iconContainer.get_children()[1].set_style(this._glossyBackgroundStyle);
+            if (this._isRunning)
+                this._enableBacklight();
+            else
+                this._disableBacklight();
+        } else {
+            this._disableBacklight();
+            this._source._iconContainer.get_children()[1].set_style(null);
+        }
 
         if (this._area)
             this._area.queue_repaint();
@@ -253,6 +346,42 @@ var RunningIndicatorDefault = class DashToDock_RunningIndicatorDefault extends R
         this._borderColor = themeNode.get_border_color(this._side);
         this._borderWidth = themeNode.get_border_width(this._side);
         this._bodyColor = themeNode.get_background_color();
+
+        let settings = Docking.DockManager.settings;
+        if (!settings.get_boolean('apply-custom-theme')) {
+            // Adjust for the backlit case
+            if (settings.get_boolean('unity-backlit-items')) {
+                // Use dominant color for dots too if the backlit is enables
+                let colorPalette = this._dominantColorExtractor._getColorPalette();
+
+                // Slightly adjust the styling
+                this._borderWidth = 2;
+
+                if (colorPalette !== null) {
+                    this._borderColor = Clutter.color_from_string(colorPalette.lighter)[1] ;
+                    this._bodyColor = Clutter.color_from_string(colorPalette.darker)[1];
+                } else {
+                    // Fallback
+                    this._borderColor = Clutter.color_from_string('white')[1];
+                    this._bodyColor = Clutter.color_from_string('gray')[1];
+                }
+            }
+
+            // Apply dominant color if requested
+            if (settings.get_boolean('running-indicator-dominant-color')) {
+                let colorPalette = this._dominantColorExtractor._getColorPalette();
+                if (colorPalette !== null) {
+                    this._bodyColor = Clutter.color_from_string(colorPalette.original)[1];
+                }
+            }
+
+            // Finally, use customize style if requested
+            if (settings.get_boolean('custom-theme-customize-running-dots')) {
+                this._borderColor = Clutter.color_from_string(settings.get_string('custom-theme-running-dots-border-color'))[1];
+                this._borderWidth = settings.get_int('custom-theme-running-dots-border-width');
+                this._bodyColor =  Clutter.color_from_string(settings.get_string('custom-theme-running-dots-color'))[1];
+            }
+        }
 
         // Define the radius as an arbitrary size, but keep large enough to account
         // for the drawing of the border.
@@ -295,6 +424,214 @@ var RunningIndicatorDefault = class DashToDock_RunningIndicatorDefault extends R
         super.destroy();
     }
 };
+
+// Adapted from dash-to-panel by Jason DeRose
+// https://github.com/jderose9/dash-to-panel
+var RunningIndicatorCiliora = class DashToDock_RunningIndicatorCiliora extends RunningIndicatorDots {
+
+    _drawIndicator(cr) {
+        if (this._isRunning) {
+
+            let size =  Math.max(this._width/20, this._borderWidth);
+            let spacing = size; // separation between the dots
+            let lineLength = this._width - (size*(this._nWindows-1)) - (spacing*(this._nWindows-1));
+            let padding = this._borderWidth;
+            // For the backlit case here we don't want the outer border visible
+            if (Docking.DockManager.settings.get_boolean('unity-backlit-items') &&
+                !Docking.DockManager.settings.get_boolean('custom-theme-customize-running-dots'))
+                padding = 0;
+            let yOffset = this._height - padding - size;
+
+            cr.setLineWidth(this._borderWidth);
+            Clutter.cairo_set_source_color(cr, this._borderColor);
+
+            cr.translate(0, yOffset);
+            cr.newSubPath();
+            cr.rectangle(0, 0, lineLength, size);
+            for (let i = 1; i < this._nWindows; i++) {
+                cr.newSubPath();
+                cr.rectangle(lineLength + (i*spacing) + ((i-1)*size), 0, size, size);
+            }
+
+            cr.strokePreserve();
+            Clutter.cairo_set_source_color(cr, this._bodyColor);
+            cr.fill();
+        }
+    }
+};
+
+// Adapted from dash-to-panel by Jason DeRose
+// https://github.com/jderose9/dash-to-panel
+var RunningIndicatorSegmented = class DashToDock_RunningIndicatorSegmented extends RunningIndicatorDots {
+
+    _drawIndicator(cr) {
+        if (this._isRunning) {
+            let size =  Math.max(this._width/20, this._borderWidth);
+            let spacing = Math.ceil(this._width/18); // separation between the dots
+            let dashLength = Math.ceil((this._width - ((this._nWindows-1)*spacing))/this._nWindows);
+            let lineLength = this._width - (size*(this._nWindows-1)) - (spacing*(this._nWindows-1));
+            let padding = this._borderWidth;
+            // For the backlit case here we don't want the outer border visible
+            if (Docking.DockManager.settings.get_boolean('unity-backlit-items') &&
+                !Docking.DockManager.settings.get_boolean('custom-theme-customize-running-dots'))
+                padding = 0;
+            let yOffset = this._height - padding - size;
+
+            cr.setLineWidth(this._borderWidth);
+            Clutter.cairo_set_source_color(cr, this._borderColor);
+
+            cr.translate(0, yOffset);
+            for (let i = 0; i < this._nWindows; i++) {
+                cr.newSubPath();
+                cr.rectangle(i*dashLength + i*spacing, 0, dashLength, size);
+            }
+
+            cr.strokePreserve();
+            Clutter.cairo_set_source_color(cr, this._bodyColor);
+            cr.fill()
+        }
+    }
+};
+
+// Adapted from dash-to-panel by Jason DeRose
+// https://github.com/jderose9/dash-to-panel
+var RunningIndicatorSolid = class DashToDock_RunningIndicatorSolid extends RunningIndicatorDots {
+
+    _drawIndicator(cr) {
+        if (this._isRunning) {
+
+            let size =  Math.max(this._width/20, this._borderWidth);
+            let padding = this._borderWidth;
+            // For the backlit case here we don't want the outer border visible
+            if (Docking.DockManager.settings.get_boolean('unity-backlit-items') &&
+                !Docking.DockManager.settings.get_boolean('custom-theme-customize-running-dots'))
+                padding = 0;
+            let yOffset = this._height - padding - size;
+
+            cr.setLineWidth(this._borderWidth);
+            Clutter.cairo_set_source_color(cr, this._borderColor);
+
+            cr.translate(0, yOffset);
+            cr.newSubPath();
+            cr.rectangle(0, 0, this._width, size);
+
+            cr.strokePreserve();
+            Clutter.cairo_set_source_color(cr, this._bodyColor);
+            cr.fill();
+
+        }
+    }
+};
+
+// Adapted from dash-to-panel by Jason DeRose
+// https://github.com/jderose9/dash-to-panel
+var RunningIndicatorSquares = class DashToDock_RunningIndicatorSquares extends RunningIndicatorDots {
+
+    _drawIndicator(cr) {
+        if (this._isRunning) {
+            let size =  Math.max(this._width/11, this._borderWidth);
+            let padding = this._borderWidth;
+            let spacing = Math.ceil(this._width/18); // separation between the dots
+            let yOffset = this._height - padding - size;
+
+            cr.setLineWidth(this._borderWidth);
+            Clutter.cairo_set_source_color(cr, this._borderColor);
+
+            cr.translate(Math.floor((this._width - this._nWindows*size - (this._nWindows-1)*spacing)/2), yOffset);
+            for (let i = 0; i < this._nWindows; i++) {
+                cr.newSubPath();
+                cr.rectangle(i*size + i*spacing, 0, size, size);
+            }
+            cr.strokePreserve();
+            Clutter.cairo_set_source_color(cr, this._bodyColor);
+            cr.fill();
+        }
+    }
+}
+
+// Adapted from dash-to-panel by Jason DeRose
+// https://github.com/jderose9/dash-to-panel
+var RunningIndicatorDashes = class DashToDock_RunningIndicatorDashes extends RunningIndicatorDots {
+
+    _drawIndicator(cr) {
+        if (this._isRunning) {
+            let size =  Math.max(this._width/20, this._borderWidth);
+            let padding = this._borderWidth;
+            let spacing = Math.ceil(this._width/18); // separation between the dots
+            let dashLength = Math.floor(this._width/4) - spacing;
+            let yOffset = this._height - padding - size;
+
+            cr.setLineWidth(this._borderWidth);
+            Clutter.cairo_set_source_color(cr, this._borderColor);
+
+            cr.translate(Math.floor((this._width - this._nWindows*dashLength - (this._nWindows-1)*spacing)/2), yOffset);
+            for (let i = 0; i < this._nWindows; i++) {
+                cr.newSubPath();
+                cr.rectangle(i*dashLength + i*spacing, 0, dashLength, size);
+            }
+
+            cr.strokePreserve();
+            Clutter.cairo_set_source_color(cr, this._bodyColor);
+            cr.fill();
+        }
+    }
+}
+
+// Adapted from dash-to-panel by Jason DeRose
+// https://github.com/jderose9/dash-to-panel
+var RunningIndicatorMetro = class DashToDock_RunningIndicatorMetro extends RunningIndicatorDots {
+
+    constructor(source) {
+        super(source);
+        this._source.add_style_class_name('metro');
+    }
+
+    destroy() {
+        this._source.remove_style_class_name('metro');
+        super.destroy();
+    }
+
+    _drawIndicator(cr) {
+        if (this._isRunning) {
+            let size =  Math.max(this._width/20, this._borderWidth);
+            let padding = 0;
+            // For the backlit case here we don't want the outer border visible
+            if (Docking.DockManager.settings.get_boolean('unity-backlit-items') &&
+                !Docking.DockManager.settings.get_boolean('custom-theme-customize-running-dots'))
+                padding = 0;
+            let yOffset = this._height - padding - size;
+
+            let n = this._nWindows;
+            if(n <= 1) {
+                cr.translate(0, yOffset);
+                Clutter.cairo_set_source_color(cr, this._bodyColor);
+                cr.newSubPath();
+                cr.rectangle(0, 0, this._width, size);
+                cr.fill();
+            } else {
+                let blackenedLength = (1/48)*this._width; // need to scale with the SVG for the stacked highlight
+                let darkenedLength = this._isFocused ? (2/48)*this._width : (10/48)*this._width;
+                let blackenedColor = this._bodyColor.shade(.3);
+                let darkenedColor = this._bodyColor.shade(.7);
+
+                cr.translate(0, yOffset);
+
+                Clutter.cairo_set_source_color(cr, this._bodyColor);
+                cr.newSubPath();
+                cr.rectangle(0, 0, this._width - darkenedLength - blackenedLength, size);
+                cr.fill();
+                Clutter.cairo_set_source_color(cr, blackenedColor);
+                cr.newSubPath();
+                cr.rectangle(this._width - darkenedLength - blackenedLength, 0, 1, size);
+                cr.fill();
+                Clutter.cairo_set_source_color(cr, darkenedColor);
+                cr.newSubPath();
+                cr.rectangle(this._width - darkenedLength, 0, darkenedLength, size);
+                cr.fill();
+            }
+        }
+    }
+}
 
 /*
  * Unity like notification and progress indicators
@@ -353,7 +690,8 @@ var UnityIndicator = class DashToDock_UnityIndicator extends IndicatorBase {
         let defaultFontSize = fontDesc.get_size() / 1024;
         let fontSize = defaultFontSize * 0.9;
         let iconSize = Main.overview.dash.iconSize;
-        let defaultIconSize = 48;
+        let defaultIconSize = Docking.DockManager.settings.get_default_value(
+            'dash-max-icon-size').unpack();
 
         if (!fontDesc.get_size_is_absolute()) {
             // fontSize was exprimed in points, so convert to pixel

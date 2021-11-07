@@ -1,7 +1,19 @@
+/* Shrink the dash by reducing padding */
+#dashtodockContainer.shrink #dash,
+#dashtodockContainer.dashtodock #dash {
+    padding:5px;
+}
+
+#dashtodockContainer.straight-corner #dash,
+#dashtodockContainer.shrink.straight-corner #dash {
+    border-radius: 0px;
+}
+
+/* for the built-in theme only, we control border radius directly for each
+position. In the other cases the border are taken dynamically from the theme */
 #dashtodockContainer #dash {
     border-radius: 20px;
     border:1px solid rgba(85, 85, 85, 0.4);
-    padding:5px;
     background-color: rgba(15, 15, 15, 0.4);
 }
 
@@ -22,7 +34,7 @@
     background-size: contain;
 }
 
-#dashtodockContainer .dash-item-container > StButton,
+#dashtodockContainer.shrink .dash-item-container > StButton,
 #dashtodockContainer.dashtodock .dash-item-container > StButton {
    padding: 1px 2px;
 }
