@@ -65,8 +65,6 @@ var ThemeManager = class DashToDock_ThemeManager {
             this._onOverviewHiding.bind(this)
         ]);
 
-        this._updateCustomStyleClasses();
-
         // destroy themeManager when the managed actor is destroyed (e.g. extension unload)
         // in order to disconnect signals
         this._actor.connect('destroy', this.destroy.bind(this));
@@ -153,58 +151,10 @@ var ThemeManager = class DashToDock_ThemeManager {
 
         if (backgroundColor==null)
             return;
-
-        let settings = Docking.DockManager.settings;
-
-        if (settings.get_boolean('custom-background-color')) {
-            // When applying a custom color, we need to check the alpha value,
-            // if not the opacity will always be overridden by the color below.
-            // Note that if using 'dynamic' transparency modes,
-            // the opacity will be set by the opaque/transparent styles anyway.
-            let newAlpha = Math.round(backgroundColor.alpha/2.55)/100;
-            if (settings.get_enum('transparency-mode') == TransparencyMode.FIXED)
-                newAlpha = settings.get_double('background-opacity');
-
-            backgroundColor = Clutter.color_from_string(settings.get_string('background-color'))[1];
-            this._customizedBackground = 'rgba(' +
-                backgroundColor.red + ',' +
-                backgroundColor.green + ',' +
-                backgroundColor.blue + ',' +
-                newAlpha + ')';
-
-            this._customizedBorder = this._customizedBackground;
-        }
         this._transparency.setColor(backgroundColor);
     }
 
-    _updateCustomStyleClasses() {
-        let settings = Docking.DockManager.settings;
-
-        if (settings.get_boolean('apply-custom-theme'))
-            this._actor.add_style_class_name('dashtodock');
-        else
-            this._actor.remove_style_class_name('dashtodock');
-
-        this._actor.add_style_class_name('shrink');
-
-        if (settings.get_enum('running-indicator-style') !== 0)
-            this._actor.add_style_class_name('running-dots');
-        else
-            this._actor.remove_style_class_name('running-dots');
-
-        // If not the built-in theme option is not selected
-        if (!settings.get_boolean('apply-custom-theme')) {
-            if (settings.get_boolean('force-straight-corner'))
-                this._actor.add_style_class_name('straight-corner');
-            else
-                this._actor.remove_style_class_name('straight-corner');
-        } else {
-            this._actor.remove_style_class_name('straight-corner');
-        }
-    }
-
     updateCustomTheme() {
-        this._updateCustomStyleClasses();
         this._updateDashOpacity();
         this._updateDashColor();
         this._adjustTheme();
@@ -225,10 +175,6 @@ var ThemeManager = class DashToDock_ThemeManager {
         // Remove prior style edits
         this._dash._container.set_style(null);
         this._transparency.disable();
-
-        // If built-in theme is enabled do nothing else
-        if (settings.get_boolean('apply-custom-theme'))
-            return;
 
         let newStyle = '';
         let position = Utils.getPosition(settings);
@@ -263,30 +209,15 @@ var ThemeManager = class DashToDock_ThemeManager {
         // I do call set_style possibly twice so that only the background gets the transition.
         // The transition-property css rules seems to be unsupported
         this._dash._container.set_style(newStyle);
-
-        // Customize background
-        let fixedTransparency = settings.get_enum('transparency-mode') == TransparencyMode.FIXED;
-        let defaultTransparency = settings.get_enum('transparency-mode') == TransparencyMode.DEFAULT;
-        if (!defaultTransparency && !fixedTransparency) {
-            this._transparency.enable();
-        }
-        else if (!defaultTransparency || settings.get_boolean('custom-background-color')) {
-            newStyle = newStyle + 'background-color:'+ this._customizedBackground + '; ' +
-                       'border-color:'+ this._customizedBorder + '; ' +
-                       'transition-delay: 0s; transition-duration: 0.250s;';
-            this._dash._container.set_style(newStyle);
-        }
     }
 
     _bindSettingsChanges() {
-        let keys = ['transparency-mode',
-                    'customize-alphas',
+        let keys = ['customize-alphas',
                     'min-alpha',
                     'max-alpha',
                     'background-opacity',
                     'custom-background-color',
                     'background-color',
-                    'apply-custom-theme',
                     'custom-theme-shrink',
                     'custom-theme-running-dots',
                     'extend-height',

@@ -741,6 +741,21 @@ var MyDash = GObject.registerClass({
             this._removables = null;
         }
 
+        if (settings.get_boolean('show-trash')) {
+            if (!this._trash) {
+                this._trash = new Locations.Trash();
+                this._signalsHandler.addWithLabel('show-trash',
+                    [ this._trash,
+                      'changed',
+                      this._queueRedisplay.bind(this) ]);
+            }
+            newApps.push(this._trash.getApp());
+        } else if (this._trash) {
+            this._signalsHandler.removeWithLabel('show-trash');
+            this._trash.destroy();
+            this._trash = null;
+        }
+
         // Figure out the actual changes to the list of items; we iterate
         // over both the list of items currently in the dash and the list
         // of items expected there, and collect additions and removals.
