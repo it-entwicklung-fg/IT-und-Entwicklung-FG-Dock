@@ -13,8 +13,8 @@
 position. In the other cases the border are taken dynamically from the theme */
 #dashtodockContainer #dash {
     border-radius: 20px;
-    border:1px solid rgba(85, 85, 85, 0.4);
-    background-color: rgba(15, 15, 15, 0.4);
+    border:1px solid rgba(85, 85, 85, 0.8);
+    background-color: rgba(30, 30, 30, 0.8);
 }
 
 /* Scrollview style */
