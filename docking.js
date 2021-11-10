@@ -449,6 +449,10 @@ var DockedDash = GObject.registerClass({
             delete this._marginLater;
         }
 
+        if (this._triggerTimeoutId) {
+            GLib.source_remove(this._triggerTimeoutId);
+        }
+
         // Remove barrier timeout
         if (this._removeBarrierTimeoutId > 0)
             GLib.source_remove(this._removeBarrierTimeoutId);
