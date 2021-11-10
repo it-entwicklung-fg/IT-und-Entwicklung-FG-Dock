@@ -304,6 +304,10 @@ var MyDash = GObject.registerClass({
     }
 
     _onDestroy() {
+        if (this._ensureAppIconVisibilityTimeoutId > 0) {
+            GLib.source_remove(this._ensureAppIconVisibilityTimeoutId);
+            this._ensureAppIconVisibilityTimeoutId = 0;
+        }
         this.iconAnimator.destroy();
         this._signalsHandler.destroy();
     }
