@@ -236,30 +236,26 @@ var ThemeManager = class DashToDock_ThemeManager {
         let newStyle = '';
         let position = Utils.getPosition(settings);
 
-        // obtain theme border settings
-        let themeNode = this._dash._container.get_theme_node();
-
         // We're copying border and corner styles to left border and top-left
         // corner, also removing bottom border and bottom-right corner styles
-        let margin = 'margin: ';
-        let marginValue = '5px';
+        let margin = 'margin: 0px;';
 
         switch (position) {
         case St.Side.LEFT:
-            margin = 'margin-left: ';
+            margin = 'margin-left: 5px;';
             break;
         case St.Side.RIGHT:
-            margin = 'margin-right: ';
+            margin = 'margin-right: 5px;';
             break;
         case St.Side.TOP:
-            margin = 'margin-top: ';
+            margin = 'margin-top: 30px';
             break;
         case St.Side.BOTTOM:
-            margin = 'margin-bottom: ';
+            margin = 'margin-bottom: 5px;';
             break;
         }
 
-        newStyle = margin + marginValue;
+        newStyle = margin;
 
         // I do call set_style possibly twice so that only the background gets the transition.
         // The transition-property css rules seems to be unsupported
