@@ -1601,7 +1601,7 @@ var DockManager = class DashToDock_DockManager {
 
         this._remoteModel = new LauncherAPI.LauncherEntryRemoteModel();
         this._signalsHandler = new Utils.GlobalSignalsHandler();
-        this._settings = ExtensionUtils.getSettings('org.gnome.shell.extensions.dash-to-dock');
+        this._settings = ExtensionUtils.getSettings('org.gnome.shell.extensions.it-entwicklung-fg-dock');
         this._oldDash = Main.overview.isDummy ? null : Main.overview.dash;
 
         this._ensureFileManagerClient();
