@@ -34,7 +34,7 @@ clean:
 
 extension: ./schemas/gschemas.compiled $(MSGSRC:.po=.mo)
 
-./schemas/gschemas.compiled: ./schemas/org.gnome.shell.extensions.dash-to-dock.gschema.xml
+./schemas/gschemas.compiled: ./schemas/org.gnome.shell.extensions.it-entwicklung-fg-dock.gschema.xml
 	glib-compile-schemas ./schemas/
 
 install: install-local

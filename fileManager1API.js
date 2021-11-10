@@ -81,14 +81,8 @@ var FileManager1Client = class DashToDock_FileManager1Client {
      */
     getWindows(location) {
         let ret = new Set();
-    	let locationEsc = location;
-	    
-    	if (!location.endsWith('/')) { 
-		locationEsc += '/'; 
-	}
-	    
         for (let [k,v] of this._locationMap) {
-            if ((k + '/').startsWith(locationEsc)) {
+            if (k.startsWith(location)) {
                 for (let l of v) {
                     ret.add(l);
                 }

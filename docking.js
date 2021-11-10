@@ -632,12 +632,11 @@ var DockedDash = GObject.registerClass({
                 this._ignoreHover = false;
                 // Do not hide if autohide is enabled and mouse is hover
                 if (!this._box.hover || !this._autohideIsEnabled)
-                    this._animateOut(settings.get_double('animation-time'), 0);
+                    this._hide();
             }
             else {
                 this._ignoreHover = true;
-                this._removeAnimations();
-                this._animateIn(settings.get_double('animation-time'), 0);
+                this._show();
             }
         }
         else {
@@ -669,16 +668,16 @@ var DockedDash = GObject.registerClass({
     }
 
     _hoverChanged() {
-        if (!this._ignoreHover) {
-            // Skip if dock is not in autohide mode for instance because it is shown
-            // by intellihide.
-            if (this._autohideIsEnabled) {
-                if (this._box.hover)
-                    this._show();
-                else
-                    this._hide();
-            }
+        // Skip if dock is not in autohide mode for instance because it is shown by intellihide or
+        // if the dock's `_ignoreHover` value is set to true.
+        if (this._ignoreHover || !this._autohideIsEnabled) {
+            return;
         }
+
+        if (this._triggerTimeoutId)
+            this._isPointerInZone() || this._box.hover ? this._show() : this._hide();
+        else
+            this._box.hover ? this._show() : this._hide();
     }
 
     getDockState() {
@@ -686,7 +685,9 @@ var DockedDash = GObject.registerClass({
     }
 
     _show() {
-        this._delayedHide = false;
+        // Remove any delayed hide animation.
+        delete this._delayedHide;
+
         if ((this._dockState == State.HIDDEN) || (this._dockState == State.HIDING)) {
             if (this._dockState == State.HIDING)
                 // suppress all potential queued transitions - i.e. added but not started,
@@ -719,7 +720,6 @@ var DockedDash = GObject.registerClass({
     _animateIn(time, delay) {
         this._dockState = State.SHOWING;
         this.dash.iconAnimator.start();
-        this._delayedHide = false;
 
       this._slider.ease_property('slidex', 1, {
             duration: time * 1000,
@@ -737,7 +737,9 @@ var DockedDash = GObject.registerClass({
                     this._removeBarrierTimeoutId = GLib.timeout_add(
                         GLib.PRIORITY_DEFAULT, 100, this._removeBarrier.bind(this));
                 } else {
-                    this._hide();
+                    // If an animate-out transition was delayed, check if
+                    // it is still necessary.
+                    this._hoverChanged();
                 }
             }
         });
@@ -877,6 +879,51 @@ var DockedDash = GObject.registerClass({
     }
 
     /**
+     * Returns whether the global pointer is considered inside of the dock
+     * area or not.
+     */
+    _isPointerInZone() {
+        let [x, y, mods] = global.get_pointer();
+
+            switch (this._position) {
+            case St.Side.LEFT:
+                if (x <= this.staticBox.x2 &&
+                    x >= this._monitor.x &&
+                    y >= this._monitor.y &&
+                    y <= this._monitor.y + this._monitor.height) {
+                    return true;
+                }
+                break;
+            case St.Side.RIGHT:
+                if (x >= this.staticBox.x1 &&
+                    x <= this._monitor.x + this._monitor.width &&
+                    y >= this._monitor.y &&
+                    y <= this._monitor.y + this._monitor.height) {
+                    return true;
+                }
+                break;
+            case St.Side.TOP:
+                if (x >= this._monitor.x &&
+                    x <= this._monitor.x + this._monitor.width &&
+                    y <= this.staticBox.y2 &&
+                    y >= this._monitor.y) {
+                    return true;
+                }
+                break;
+            case St.Side.BOTTOM:
+                if (x >= this._monitor.x &&
+                    x <= this._monitor.x + this._monitor.width &&
+                    y >= this.staticBox.y1 &&
+                    y <= this._monitor.y + this._monitor.height) {
+                    return true;
+                }
+                break;
+            }
+
+        return false;
+    }
+
+    /**
      * handler for mouse pressure sensed
      */
     _onPressureSensed() {
@@ -885,52 +932,14 @@ var DockedDash = GObject.registerClass({
 
         // In case the mouse move away from the dock area before hovering it, in such case the leave event
         // would never be triggered and the dock would stay visible forever.
-        let triggerTimeoutId =  GLib.timeout_add(GLib.PRIORITY_DEFAULT, 250, () => {
-            triggerTimeoutId = 0;
-
-            let [x, y, mods] = global.get_pointer();
-            let shouldHide = true;
-            switch (this._position) {
-            case St.Side.LEFT:
-                if (x <= this.staticBox.x2 &&
-                    x >= this._monitor.x &&
-                    y >= this._monitor.y &&
-                    y <= this._monitor.y + this._monitor.height) {
-                    shouldHide = false;
-                }
-                break;
-            case St.Side.RIGHT:
-                if (x >= this.staticBox.x1 &&
-                    x <= this._monitor.x + this._monitor.width &&
-                    y >= this._monitor.y &&
-                    y <= this._monitor.y + this._monitor.height) {
-                    shouldHide = false;
-                }
-                break;
-            case St.Side.TOP:
-                if (x >= this._monitor.x &&
-                    x <= this._monitor.x + this._monitor.width &&
-                    y <= this.staticBox.y2 &&
-                    y >= this._monitor.y) {
-                    shouldHide = false;
-                }
-                break;
-            case St.Side.BOTTOM:
-                if (x >= this._monitor.x &&
-                    x <= this._monitor.x + this._monitor.width &&
-                    y >= this.staticBox.y1 &&
-                    y <= this._monitor.y + this._monitor.height) {
-                    shouldHide = false;
-                }
-            }
-            if (shouldHide) {
+        this._triggerTimeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 250, () => { 
+            if (!this._isPointerInZone()) {
                 this._hoverChanged();
                 return GLib.SOURCE_REMOVE;
             }
             else {
                 return GLib.SOURCE_CONTINUE;
             }
-
         });
 
         this._show();
@@ -1884,20 +1893,27 @@ var DockManager = class DashToDock_DockManager {
                     this._forcedOverview = true;
                     let grid = visibleView._grid;
                     if (animate) {
+                        // Animate in the the appview, hide the appGrid to avoiud flashing
+                        // Go to the appView before entering the overview, skipping the workspaces.
+                        // Do this manually avoiding opacity in transitions so that the setting of the opacity
+                        // to 0 doesn't get overwritten.
+                        Main.overview.viewSelector._activePage.opacity = 0;
+                        Main.overview.viewSelector._activePage.hide();
+                        Main.overview.viewSelector._activePage = Main.overview.viewSelector._appsPage;
+                        Main.overview.viewSelector._activePage.show();
+                        grid.opacity = 0;
+
                         // The animation has to be trigered manually because the AppDisplay.animate
                         // method is waiting for an allocation not happening, as we skip the workspace view
                         // and the appgrid could already be allocated from previous shown.
                         // It has to be triggered after the overview is shown as wrong coordinates are obtained
                         // otherwise.
-
-                        // There was another issue in gnome 3.38 causing flickering every time using the previous
-                        // workaround. Because it is no longer needed, only the part that prevents it from freezing
-                        // on first opening is used.
-
-                        Main.overview.viewSelector._activePage = Main.overview.viewSelector._appsPage;
-                        Meta.later_add(Meta.LaterType.BEFORE_REDRAW, () => {
-                            grid.opacity = 255;
-                            grid.animateSpring(IconGrid.AnimationDirection.IN, this.mainDock.dash.showAppsButton);
+                        let overviewShownId = Main.overview.connect('shown', () => {
+                            Main.overview.disconnect(overviewShownId);
+                            Meta.later_add(Meta.LaterType.BEFORE_REDRAW, () => {
+                                grid.opacity = 255;
+                                grid.animateSpring(IconGrid.AnimationDirection.IN, this.mainDock.dash.showAppsButton);
+                            });
                         });
                     }
                     else {
@@ -2017,7 +2033,7 @@ var IconAnimator = class DashToDock_IconAnimator {
             const danceRotation = progress < 1/6 ? 15*Math.sin(progress*24*Math.PI) : 0;
             const dancers = this._animations.dance;
             for (let i = 0, iMax = dancers.length; i < iMax; i++) {
-                dancers[i].target.rotation_angle_z = danceRotation;
+                dancers[i].rotation_angle_z = danceRotation;
             }
         });
     }
@@ -2025,13 +2041,6 @@ var IconAnimator = class DashToDock_IconAnimator {
     destroy() {
         this._timeline.stop();
         this._timeline = null;
-        for (const name in this._animations) {
-            const pairs = this._animations[name];
-            for (let i = 0, iMax = pairs.length; i < iMax; i++) {
-                const pair = pairs[i];
-                pair.target.disconnect(pair.targetDestroyId);
-            }
-        }
         this._animations = null;
     }
 
@@ -2050,8 +2059,7 @@ var IconAnimator = class DashToDock_IconAnimator {
     }
 
     addAnimation(target, name) {
-        const targetDestroyId = target.connect('destroy', () => this.removeAnimation(target, name));
-        this._animations[name].push({ target, targetDestroyId });
+        this._animations[name].push(target);
         if (this._started && this._count === 0) {
             this._timeline.start();
         }
@@ -2059,17 +2067,12 @@ var IconAnimator = class DashToDock_IconAnimator {
     }
 
     removeAnimation(target, name) {
-        const pairs = this._animations[name];
-        for (let i = 0, iMax = pairs.length; i < iMax; i++) {
-            const pair = pairs[i];
-            if (pair.target === target) {
-                target.disconnect(pair.targetDestroyId);
-                pairs.splice(i, 1);
-                this._count--;
-                if (this._started && this._count === 0) {
-                    this._timeline.stop();
-                }
-                return;
+        const index = this._animations[name].indexOf(target);
+        if (index >= 0) {
+            this._animations[name].splice(index, 1);
+            this._count--;
+            if (this._started && this._count === 0) {
+                this._timeline.stop();
             }
         }
     }

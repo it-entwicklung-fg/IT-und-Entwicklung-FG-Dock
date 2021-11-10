@@ -320,15 +320,13 @@ class DashToDock_WindowPreviewMenuItem extends PopupMenu.PopupBaseMenuItem {
         this._window = window;
         this._destroyId = 0;
         this._windowAddedId = 0;
-        [this._width, this._height, this._scale] = this._getWindowPreviewSize(); // This gets the actual windows size for the preview
 
         // We don't want this: it adds spacing on the left of the item.
         this.remove_child(this._ornamentLabel);
         this.add_style_class_name('dashtodock-app-well-preview-menu-item');
 
-        // Now we don't have to set PREVIEW_MAX_WIDTH and PREVIEW_MAX_HEIGHT as preview size - that made all kinds of windows either stretched or squished (aspect ratio problem)
         this._cloneBin = new St.Bin();
-        this._cloneBin.set_size(this._width*this._scale, this._height*this._scale);
+        this._cloneBin.set_size(PREVIEW_MAX_WIDTH, PREVIEW_MAX_HEIGHT);
 
         // TODO: improve the way the closebutton is layout. Just use some padding
         // for the moment.
@@ -345,7 +343,7 @@ class DashToDock_WindowPreviewMenuItem extends PopupMenu.PopupBaseMenuItem {
         this.closeButton.opacity = 0;
         this.closeButton.connect('clicked', this._closeWindow.bind(this));
 
-        let overlayGroup = new Clutter.Actor({layout_manager: new Clutter.BinLayout(), y_expand: true });
+        let overlayGroup = new Clutter.Actor({layout_manager: new Clutter.BinLayout() });
 
         overlayGroup.add_actor(this._cloneBin);
         overlayGroup.add_actor(this.closeButton);
@@ -372,26 +370,6 @@ class DashToDock_WindowPreviewMenuItem extends PopupMenu.PopupBaseMenuItem {
         this.connect('destroy', this._onDestroy.bind(this));
     }
 
-    _getWindowPreviewSize() {
-        let mutterWindow = this._window.get_compositor_private();
-        let [width, height] = mutterWindow.get_size();
-
-        let scale;
-
-        if (Utils.getPreviewScale()) {
-            scale = Utils.getPreviewScale();
-        } else {
-            // a simple example with 1680x1050:
-            // * 250/1680 = 0,1488
-            // * 150/1050 = 0,1429
-            // => scale is 0,1429
-            scale = Math.min(1.0, PREVIEW_MAX_WIDTH/width, PREVIEW_MAX_HEIGHT/height)
-        }
-
-        // width and height that we wanna multiply by scale
-        return [width, height, scale];
-    }
-
     _cloneTexture(metaWin){
 
         let mutterWindow = metaWin.get_compositor_private();
@@ -412,10 +390,12 @@ class DashToDock_WindowPreviewMenuItem extends PopupMenu.PopupBaseMenuItem {
             return;
         }
 
+        let [width, height] = mutterWindow.get_size();
+        let scale = Math.min(1.0, PREVIEW_MAX_WIDTH/width, PREVIEW_MAX_HEIGHT/height);
         let clone = new Clutter.Clone ({ source: mutterWindow,
                                          reactive: true,
-                                         width: this._width * this._scale,
-                                         height: this._height * this._scale });
+                                         width: width * scale,
+                                         height: height * scale });
 
         // when the source actor is destroyed, i.e. the window closed, first destroy the clone
         // and then destroy the menu item (do this animating out)

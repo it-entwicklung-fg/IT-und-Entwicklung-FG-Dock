@@ -45,6 +45,9 @@ var Trash = class DashToDock_Trash {
             this._monitor.disconnect(this._signalId);
             this._monitor.run_dispose();
         }
+        if (this._schedUpdateId) {
+            GLib.source_remove(this._schedUpdateId);
+        }
         this._file.run_dispose();
     }
 
