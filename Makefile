@@ -5,7 +5,6 @@ BASE_MODULES = extension.js stylesheet.css metadata.json LICENSE README.md
 EXTRA_MODULES = dash.js docking.js appIcons.js appIconIndicators.js fileManager1API.js launcherAPI.js locations.js windowPreview.js intellihide.js theming.js utils.js dbusmenuUtils.js
 EXTRA_MEDIA = logo.png glossy.svg highlight_stacked_bg.svg highlight_stacked_bg_h.svg
 TOLOCALIZE =  appIcons.js locations.js
-MSGSRC = $(wildcard po/*.po)
 ifeq ($(strip $(DESTDIR)),)
 	INSTALLTYPE = local
 	INSTALLBASE = $(HOME)/.local/share/gnome-shell/extensions
@@ -32,7 +31,7 @@ all: extension
 clean:
 	rm -f ./schemas/gschemas.compiled
 
-extension: ./schemas/gschemas.compiled $(MSGSRC:.po=.mo)
+extension: ./schemas/gschemas.compiled
 
 ./schemas/gschemas.compiled: ./schemas/org.gnome.shell.extensions.it-entwicklung-fg-dock.gschema.xml
 	glib-compile-schemas ./schemas/
