@@ -1,10 +1,9 @@
 # IT und Entwicklung - FG Dock
+**Discontinued!** *Wird nicht weiter entwickelt, da diese Funktionen ebenfalls vom Ubuntu-Dock unterstützt werden.*
 ![screenshot](https://raw.githubusercontent.com/it-entwicklung-fg/IT-und-Entwicklung-FG-Dock/master/media/screenshot.png)
 
 ## A dock for the GNOME Shell
 This extension enhances the dash moving it out of the overview and transforming it in a dock for an easier launching of applications and a faster switching between windows and desktops without having to leave the desktop view.
-
-[<img src="https://github.com/it-entwicklung-fg/IT-und-Entwicklung-FG-Dock/raw/master/media/get-it-on-ego.svg" height="100">](https://extensions.gnome.org/review/27575)
 
 ## Installation from source
 
